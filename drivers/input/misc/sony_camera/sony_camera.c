@@ -120,7 +120,7 @@ struct sony_camera_info {
 	uint16_t			i2c_addr;
 	uint16_t			slave_addr;
 	struct sony_camera_match_id	match_id;
-	uint16_t			thremal_enable;
+	uint16_t			thermal_enable;
 	int				modules_num;
 	struct sony_camera_module	*modules;
 	const char			*default_module_name;
@@ -418,12 +418,12 @@ static int sony_camera_info_init(struct platform_device *p_dev,
 		camera_data[id].cci_info.cci_i2c_master = val_u32[0];
 	}
 
-	rc = of_property_read_u32(of_node, "thremal_enable", &val_u32[0]);
+	rc = of_property_read_u32(of_node, "thermal_enable", &val_u32[0]);
 	if (rc < 0) {
 		LOGE("%s failed %d\n", __func__, __LINE__);
 		goto fail;
 	}
-	camera_info[id].thremal_enable = val_u32[0];
+	camera_info[id].thermal_enable = val_u32[0];
 
 	rc = sony_camera_get_dt_gpio_req_tbl(of_node, &camera_data[id]);
 	if (rc < 0) {
@@ -1869,7 +1869,7 @@ static int sony_camera_platform_probe(struct platform_device *p_dev)
 		goto fail;
 	}
 
-	if (camera_info[id].thremal_enable) {
+	if (camera_info[id].thermal_enable) {
 		camera_data[id].thermal_zone_dev[0] =
 			thermal_zone_device_register(thermal_name[id],
 			0, 0, 0, &sony_camera_thermal_ops, 0, 0, 0);
