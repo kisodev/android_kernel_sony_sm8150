@@ -12,10 +12,6 @@ dtbo-$(CONFIG_MACH_SONY_GRIFFIN_S) += \
 	sm8150-kumano-griffin_s-overlay.dtbo
 dtbo-$(CONFIG_MACH_SONY_GRIFFIN_P) += \
 	sm8150-kumano-griffin_p-overlay.dtbo
-dtbo-$(CONFIG_MACH_SONY_SPHINX) += \
-	sm8150-sdx50m-kumano-plus-sphinx-overlay.dtbo
-dtbo-$(CONFIG_MACH_SONY_HORUS) += \
-        sm8150-sdx50m-kumano-plus-horus-overlay.dtbo
 dtbo-$(CONFIG_MACH_SONY_BAHAMUT) += \
 	sm8150-kumano-bahamut_generic-overlay.dtbo
 dtbo-$(CONFIG_MACH_SONY_BAHAMUT_K) += \
@@ -45,12 +41,6 @@ sm8150-kumano-griffin_s-overlay.dtbo-base := ../qcom/sm8150.dtb ../qcom/sm8150-v
 endif
 ifeq ($(CONFIG_MACH_SONY_GRIFFIN_P),y)
 sm8150-kumano-griffin_p-overlay.dtbo-base := ../qcom/sm8150.dtb ../qcom/sm8150-v2.dtb
-endif
-ifeq ($(CONFIG_MACH_SONY_SPHINX),y)
-sm8150-sdx50m-kumano-plus-sphinx-overlay.dtbo-base := ../qcom/sm8150.dtb ../qcom/sm8150-v2.dtb
-endif
-ifeq ($(CONFIG_MACH_SONY_HORUS),y)
-sm8150-sdx50m-kumano-plus-horus-overlay.dtbo-base := ../qcom/sm8150.dtb ../qcom/sm8150-v2.dtb
 endif
 ifeq ($(CONFIG_MACH_SONY_BAHAMUT),y)
 sm8150-kumano-bahamut_generic-overlay.dtbo-base := ../qcom/sm8150.dtb ../qcom/sm8150-v2.dtb
@@ -89,12 +79,6 @@ dtb-$(CONFIG_MACH_SONY_GRIFFIN_S) += \
 dtb-$(CONFIG_MACH_SONY_GRIFFIN_P) += \
 	sm8150-kumano-griffin_p.dtb \
 	sm8150-v2-kumano-griffin_p.dtb
-dtb-$(CONFIG_MACH_SONY_SPHINX) += \
-	sm8150-sdx50m-kumano-plus-sphinx.dtb \
-	sm8150-sdx50m-v2-kumano-plus-sphinx.dtb
-dtb-$(CONFIG_MACH_SONY_HORUS) += \
-        sm8150-sdx50m-kumano-plus-horus.dtb \
-        sm8150-sdx50m-v2-kumano-plus-horus.dtb
 dtb-$(CONFIG_MACH_SONY_BAHAMUT) += \
 	sm8150-kumano-bahamut_generic.dtb \
 	sm8150-v2-kumano-bahamut_generic.dtb

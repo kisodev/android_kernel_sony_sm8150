@@ -225,24 +225,6 @@ config MACH_SONY_GRIFFIN_P
 	If you enable this config,
 	please use SONY Mobile device tree.
 
-config MACH_SONY_SPHINX
-	bool "Sony Mobile Sphinx"
-	depends on ARCH_SONY_KUMANO
-	help
-	Support for the SONY Mobile Sphinx device
-	which is based on SONY Kumano platform.
-	If you enable this config,
-	please use SONY Mobile device tree.
-
-config MACH_SONY_HORUS
-	bool "Sony Mobile Horus"
-	depends on ARCH_SONY_KUMANO
-	help
-	Support for the SONY Mobile Horus device
-	which is based on SONY Kumano platform.
-	If you enable this config,
-	please use SONY Mobile device tree.
-
 config MACH_SONY_BAHAMUT
 	bool "Sony Mobile Bahamut"
 	depends on ARCH_SONY_KUMANO

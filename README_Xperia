@@ -12,8 +12,6 @@ Configuration files can be found in arch/arm64/configs.
     Xperia XZn SO-nnX      => bahamut_n_diffconfig
     Xperia XZn SOVnn       => bahamut_k_diffconfig
     Xperia XZn nnnSO       => bahamut_s_diffconfig
-    Xperia XZn Hnnnn/Hnnnn => horus_diffconfig
-    Xperia XZn Hnnnn/Hnnnn => sphinx_diffconfig
 
 How to build your kernel:
 
