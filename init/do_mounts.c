@@ -298,6 +298,7 @@ done:
 }
 EXPORT_SYMBOL_GPL(name_to_dev_t);
 
+#if 0
 static int __init root_dev_setup(char *line)
 {
 	strlcpy(saved_root_name, line, sizeof(saved_root_name));
@@ -305,6 +306,7 @@ static int __init root_dev_setup(char *line)
 }
 
 __setup("root=", root_dev_setup);
+#endif
 
 #ifdef CONFIG_EARLY_SERVICES
 static int __init modem_dev_setup(char *line)
