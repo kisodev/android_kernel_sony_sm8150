@@ -386,6 +386,10 @@ config INPUT_TCS3490
         tristate "AMS TCS3490 color sensor"
         default n
 
+config INPUT_POWERKEY_FORCECRASH
+        tristate "Force panic through power button"
+        default n
+
 config NFC_PN553_DEVICES
 	tristate "Nxp pn553 NCI protocol driver (I2C) devices"
 	default n

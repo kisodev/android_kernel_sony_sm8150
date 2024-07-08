@@ -91,4 +91,5 @@ obj-$(CONFIG_SONY_CAMERA)               += sony_camera/
 obj-$(CONFIG_CAMERA_SYNC)               += camera_sync/
 obj-$(CONFIG_FLASH_LED)               += flash_led/
 obj-$(CONFIG_INPUT_TCS3490)               += tcs3490/
+obj-$(CONFIG_INPUT_POWERKEY_FORCECRASH)   += powerkey_forcecrash/
 obj-$(CONFIG_NFC_PN553_DEVICES)		+= pn553.o
