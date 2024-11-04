@@ -810,15 +810,11 @@
 #define SW_MUTE_DEVICE		0x0e  /* set = device disabled */
 #define SW_GLOVE		0x0f	/* set = glove mode */
 #define SW_PEN_INSERTED		0x0f  /* set = pen inserted */
-#define SW_HPHL_OVERCURRENT	0x10  /* set = over current on left hph */
-#define SW_HPHR_OVERCURRENT	0x11  /* set = over current on right hph */
-#define SW_MICROPHONE2_INSERT	0x12  /* set = inserted */
-#define SW_UNSUPPORT_INSERT	0x13  /* set = unsupported device inserted */
-#define SW_MACHINE_COVER	0x14  /* set = cover closed */
-#define SW_FLIP                 0x15    /* set = flip cover */
-#define SW_CERTIFYHALL          0x1b    /* set = certify_hall... */
-#define SW_MAX_KARI			0x1F
-#define SW_MAX			0x20
+#define SW_MACHINE_COVER	0x10  /* set = cover closed */
+#define SW_FLIP           0x11    /* set = flip cover */
+#define SW_CERTIFYHALL    0x17    /* set = certify_hall... */
+#define SW_MAX_KARI       0x1b
+#define SW_MAX            0x1b
 #define SW_CNT			(SW_MAX+1)
 
 /*
