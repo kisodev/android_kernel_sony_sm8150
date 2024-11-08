@@ -147,6 +147,7 @@ struct sdhci_msm_pltfm_data {
 	struct sdhci_msm_pin_data *pin_data;
 	struct sdhci_pinctrl_data *pctrl_data;
 	int status_gpio; /* card detection GPIO that is configured as IRQ */
+	int uim2_gpio;
 	struct sdhci_msm_bus_voting_data *voting_data;
 	u32 *sup_clk_table;
 	unsigned char sup_clk_cnt;
@@ -236,7 +237,7 @@ struct sdhci_msm_host {
 	u32 clk_rate; /* Keeps track of current clock rate that is set */
 	bool tuning_done;
 	bool calibration_done;
-	u8 saved_tuning_phase;
+	int saved_tuning_phase;
 	bool en_auto_cmd21;
 	struct device_attribute auto_cmd21_attr;
 	bool is_sdiowakeup_enabled;

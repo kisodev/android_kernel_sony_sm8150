@@ -43,6 +43,7 @@
 #include <linux/mmu_notifier.h>
 #include <linux/memory_hotplug.h>
 #include <linux/show_mem_notifier.h>
+#include <uapi/linux/sched/types.h>
 
 #include <asm/tlb.h>
 #include "internal.h"
@@ -56,6 +57,8 @@ int sysctl_oom_dump_tasks = 1;
 int sysctl_reap_mem_on_sigkill;
 
 DEFINE_MUTEX(oom_lock);
+/* Serializes oom_score_adj and oom_score_adj_min updates */
+DEFINE_MUTEX(oom_adj_mutex);
 
 #ifdef CONFIG_NUMA
 /**
@@ -630,11 +633,16 @@ void wake_oom_reaper(struct task_struct *tsk)
 
 static int __init oom_init(void)
 {
+	struct sched_param param = { .sched_priority = 1 };
+
 	oom_reaper_th = kthread_run(oom_reaper, NULL, "oom_reaper");
 	if (IS_ERR(oom_reaper_th)) {
 		pr_err("Unable to start OOM reaper %ld. Continuing regardless\n",
 				PTR_ERR(oom_reaper_th));
 		oom_reaper_th = NULL;
+	} else {
+		sched_setscheduler_nocheck(oom_reaper_th, SCHED_FIFO,
+						 &param);
 	}
 	return 0;
 }
@@ -906,7 +914,7 @@ static void oom_kill_process(struct oom_control *oc, const char *message)
 
 	/* Raise event before sending signal: task reaper must see this */
 	count_vm_event(OOM_KILL);
-	count_memcg_event_mm(mm, OOM_KILL);
+	memcg_memory_event_mm(mm, MEMCG_OOM_KILL);
 
 	/*
 	 * We should send SIGKILL before granting access to memory reserves
@@ -914,6 +922,11 @@ static void oom_kill_process(struct oom_control *oc, const char *message)
 	 * reserves from the user space under its control.
 	 */
 	do_send_sig_info(SIGKILL, SEND_SIG_FORCED, victim, true);
+	trace_oom_sigkill(victim->pid,  victim->comm,
+			  victim_points,
+			  get_mm_rss(victim->mm),
+			  oc->gfp_mask);
+
 	mark_oom_victim(victim);
 	pr_err("Killed process %d (%s) total-vm:%lukB, anon-rss:%lukB, file-rss:%lukB, shmem-rss:%lukB\n",
 		task_pid_nr(victim), victim->comm, K(victim->mm->total_vm),
@@ -1090,19 +1103,15 @@ bool out_of_memory(struct oom_control *oc)
 }
 
 /*
- * The pagefault handler calls here because it is out of memory, so kill a
- * memory-hogging task. If oom_lock is held by somebody else, a parallel oom
- * killing is already in progress so do nothing.
+ * The pagefault handler calls here because some allocation has failed. We have
+ * to take care of the memcg OOM here because this is the only safe context without
+ * any locks held but let the oom killer triggered from the allocation context care
+ * about the global OOM.
  */
 void pagefault_out_of_memory(void)
 {
-	struct oom_control oc = {
-		.zonelist = NULL,
-		.nodemask = NULL,
-		.memcg = NULL,
-		.gfp_mask = 0,
-		.order = 0,
-	};
+	static DEFINE_RATELIMIT_STATE(pfoom_rs, DEFAULT_RATELIMIT_INTERVAL,
+				      DEFAULT_RATELIMIT_BURST);
 
 	if (IS_ENABLED(CONFIG_HAVE_LOW_MEMORY_KILLER))
 		return;
@@ -1110,10 +1119,11 @@ void pagefault_out_of_memory(void)
 	if (mem_cgroup_oom_synchronize(true))
 		return;
 
-	if (!mutex_trylock(&oom_lock))
+	if (fatal_signal_pending(current))
 		return;
-	out_of_memory(&oc);
-	mutex_unlock(&oom_lock);
+
+	if (__ratelimit(&pfoom_rs))
+		pr_warn("Huh VM_FAULT_OOM leaked out to the #PF handler. Retrying PF\n");
 }
 
 /* Call this function with task_lock being held as we're accessing ->mm */

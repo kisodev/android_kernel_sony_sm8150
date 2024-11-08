@@ -10,7 +10,9 @@
  * The MS-DOS filesystem constants/structures
  */
 
+#ifndef SECTOR_SIZE
 #define SECTOR_SIZE	512		/* sector size (bytes) */
+#endif
 #define SECTOR_BITS	9		/* log2(SECTOR_SIZE) */
 #define MSDOS_DPB	(MSDOS_DPS)	/* dir entries per block */
 #define MSDOS_DPB_BITS	4		/* log2(MSDOS_DPB) */
@@ -46,6 +48,7 @@
 
 #define CASE_LOWER_BASE	8	/* base is lower case */
 #define CASE_LOWER_EXT	16	/* extension is lower case */
+#define FAT_NO_83NAME	32	/* no 8.3 short filename for this file */
 
 #define DELETED_FLAG	0xe5	/* marks file as deleted when in name[0] */
 #define IS_FREE(n)	(!*(n) || *(n) == DELETED_FLAG)

@@ -35,6 +35,7 @@
 #include <linux/user.h>
 #include <linux/delay.h>
 #include <linux/reboot.h>
+#include <linux/console.h>
 #include <linux/interrupt.h>
 #include <linux/kallsyms.h>
 #include <linux/init.h>
@@ -64,8 +65,36 @@
 
 #ifdef CONFIG_CC_STACKPROTECTOR
 #include <linux/stackprotector.h>
-unsigned long __stack_chk_guard __read_mostly;
+unsigned long __stack_chk_guard __ro_after_init;
 EXPORT_SYMBOL(__stack_chk_guard);
+#endif
+
+#ifdef CONFIG_ARM64_FLUSH_CONSOLE_ON_RESTART
+void arm_machine_flush_console(void)
+{
+	printk("\n");
+	pr_emerg("Restarting %s\n", linux_banner);
+	if (console_trylock()) {
+		console_unlock();
+		return;
+	}
+
+	mdelay(50);
+
+	local_irq_disable();
+	if (!console_trylock())
+		pr_emerg("arm_restart: Console was locked! Busting\n");
+	else
+		pr_emerg("arm_restart: Console was locked!\n");
+	if (is_console_suspended())
+		resume_console();
+	else
+		console_unlock();
+}
+#else
+void arm_machine_flush_console(void)
+{
+}
 #endif
 
 /*
@@ -170,6 +199,10 @@ void machine_restart(char *cmd)
 	if (efi_enabled(EFI_RUNTIME_SERVICES))
 		efi_reboot(reboot_mode, NULL);
 
+	/* Flush the console to make sure all the relevant messages make it
+	 * out to the console drivers */
+	arm_machine_flush_console();
+
 	/* Now call the architecture specific reboot code. */
 	if (arm_pm_restart)
 		arm_pm_restart(reboot_mode, cmd);
@@ -199,7 +232,7 @@ static void show_data(unsigned long addr, int nbytes, const char *name)
 	if (addr < KIMAGE_VADDR || addr > -256UL)
 		return;
 
-	printk("\n%s: %#lx:\n", name, addr);
+	printk("\n%s: %pS:\n", name, addr);
 
 	/*
 	 * round address down to a 32 bit boundary

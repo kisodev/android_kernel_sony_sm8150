@@ -45,8 +45,8 @@
 
 #define MAX_LED_TRIGGERS          3
 
-#define MSM_EEPROM_MEMORY_MAP_MAX_SIZE  80
-#define MSM_EEPROM_MAX_MEM_MAP_CNT      8
+#define MSM_EEPROM_MEMORY_MAP_MAX_SIZE  512
+#define MSM_EEPROM_MAX_MEM_MAP_CNT      9
 
 #define MSM_SENSOR_BYPASS_VIDEO_NODE    1
 
@@ -54,13 +54,13 @@
 
 #define SECURE_CAMERA
 
-#define SECURE_CAM_RST_MODULES
-
 enum msm_sensor_camera_id_t {
 	CAMERA_0,
 	CAMERA_1,
 	CAMERA_2,
 	CAMERA_3,
+	CAMERA_4,
+	CAMERA_5,
 	MAX_CAMERAS,
 };
 
@@ -259,6 +259,9 @@ enum msm_camera_i2c_operation {
 	MSM_CAM_WRITE = 0,
 	MSM_CAM_POLL,
 	MSM_CAM_READ,
+	MSM_CAM_READ_PAGE,
+	MSM_CAM_WRITE_DELAYUSEC,
+	MSM_CAM_READ_CONTINUOUS,
 };
 
 struct msm_sensor_i2c_sync_params {
@@ -357,8 +360,6 @@ struct msm_camera_csid_params {
 	struct msm_camera_csid_lut_params lut_params;
 	unsigned char csi_3p_sel;
 	unsigned char is_secure;
-	uint32_t topology;
-	unsigned char is_streamon;
 };
 
 struct msm_camera_csid_testmode_parms {

@@ -154,12 +154,14 @@ static int ufs_qcom_enable_lane_clks(struct ufs_qcom_host *host)
 	if (err)
 		goto disable_rx_l0;
 
-	if (host->hba->lanes_per_direction > 1) {
+	if (host->hba->lanes_rx > 1) {
 		err = ufs_qcom_host_clk_enable(dev, "rx_lane1_sync_clk",
 			host->rx_l1_sync_clk);
 		if (err)
 			goto disable_tx_l0;
+	}
 
+	if (host->hba->lanes_tx > 1) {
 		/* The tx lane1 clk could be muxed, hence keep this optional */
 		if (host->tx_l1_sync_clk)
 			ufs_qcom_host_clk_enable(dev, "tx_lane1_sync_clk",
@@ -199,7 +201,7 @@ static int ufs_qcom_init_lane_clks(struct ufs_qcom_host *host)
 	}
 
 	/* In case of single lane per direction, don't read lane1 clocks */
-	if (host->hba->lanes_per_direction > 1) {
+	if (host->hba->lanes_rx > 1) {
 		err = ufs_qcom_host_clk_get(dev, "rx_lane1_sync_clk",
 			&host->rx_l1_sync_clk);
 		if (err) {
@@ -207,7 +209,9 @@ static int ufs_qcom_init_lane_clks(struct ufs_qcom_host *host)
 					__func__, err);
 			goto out;
 		}
+	}
 
+	if (host->hba->lanes_tx > 1) {
 		/* The tx lane1 clk could be muxed, hence keep this optional */
 		ufs_qcom_host_clk_get(dev, "tx_lane1_sync_clk",
 					&host->tx_l1_sync_clk);
@@ -1254,8 +1258,11 @@ static void ufs_qcom_dev_ref_clk_ctrl(struct ufs_qcom_host *host, bool enable)
 
 		writel_relaxed(temp, host->dev_ref_clk_ctrl_mmio);
 
-		/* ensure that ref_clk is enabled/disabled before we return */
-		wmb();
+		/*
+		 * Make sure the write to ref_clk reaches the destination and
+		 * not stored in a Write Buffer (WB).
+		 */
+		readl(host->dev_ref_clk_ctrl_mmio);
 
 		/*
 		 * If we call hibern8 exit after this, we need to make sure that

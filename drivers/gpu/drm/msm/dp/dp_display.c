@@ -23,6 +23,7 @@
 #include <linux/extcon.h>
 #include <linux/soc/qcom/fsa4480-i2c.h>
 
+#include <drm/drm_client.h>
 #include "sde_connector.h"
 
 #include "msm_drv.h"
@@ -38,10 +39,17 @@
 #include "dp_display.h"
 #include "sde_hdcp.h"
 #include "dp_debug.h"
+#ifdef CONFIG_DRM_SDE_SPECIFIC_PANEL
+#include "dp_usbpd.h"
+#endif /* CONFIG_DRM_SDE_SPECIFIC_PANEL */
 
 #define DP_MST_DEBUG(fmt, ...) pr_debug(fmt, ##__VA_ARGS__)
 
 static struct dp_display *g_dp_display;
+#ifdef CONFIG_DRM_SDE_SPECIFIC_PANEL
+struct device virtualdev;
+#endif /* CONFIG_DRM_SDE_SPECIFIC_PANEL */
+
 #define HPD_STRING_SIZE 30
 
 struct dp_hdcp_dev {
@@ -119,6 +127,9 @@ struct dp_display_private {
 	bool process_hpd_connect;
 
 	struct notifier_block usb_nb;
+#ifdef CONFIG_DRM_SDE_SPECIFIC_PANEL
+	u32 dp_stop_state;
+#endif /* CONFIG_DRM_SDE_SPECIFIC_PANEL */
 };
 
 static const struct of_device_id dp_dt_match[] = {
@@ -126,9 +137,17 @@ static const struct of_device_id dp_dt_match[] = {
 	{}
 };
 
+static void dp_display_update_hdcp_info(struct dp_display_private *dp);
+
 static inline bool dp_display_is_hdcp_enabled(struct dp_display_private *dp)
 {
 	return dp->link->hdcp_status.hdcp_version && dp->hdcp.ops;
+}
+
+static bool is_drm_bootsplash_enabled(struct device *dev)
+{
+	return of_property_read_bool(dev->of_node,
+		"qcom,sde-drm-fb-splash-logo-enabled");
 }
 
 static irqreturn_t dp_display_irq(int irq, void *dev_id)
@@ -631,6 +650,7 @@ static int dp_display_send_hpd_notification(struct dp_display_private *dp)
 {
 	int ret = 0;
 	bool hpd = dp->is_connected;
+	static int bootsplash_count;
 
 	dp->aux->state |= DP_STATE_NOTIFICATION_SENT;
 
@@ -638,6 +658,14 @@ static int dp_display_send_hpd_notification(struct dp_display_private *dp)
 		dp->dp_display.is_sst_connected = hpd;
 	else
 		dp->dp_display.is_sst_connected = false;
+
+	if (!dp->dp_display.is_bootsplash_en
+		&& is_drm_bootsplash_enabled(dp->dp_display.drm_dev->dev)
+		&& !bootsplash_count) {
+		dp->dp_display.is_bootsplash_en = true;
+		bootsplash_count++;
+		drm_client_dev_register(dp->dp_display.drm_dev);
+	}
 
 	reinit_completion(&dp->notification_comp);
 	dp_display_send_hpd_event(dp);
@@ -922,6 +950,13 @@ static int dp_display_usbpd_configure_cb(struct device *dev)
 			goto end;
 		}
 	}
+#ifdef CONFIG_DRM_SDE_SPECIFIC_PANEL
+	/* check for stop_state */
+	if (dp->dp_stop_state) {
+		pr_info("dp is stopped (state=%08x)\n", dp->dp_stop_state);
+		goto end;
+	}
+#endif /* CONFIG_DRM_SDE_SPECIFIC_PANEL */
 
 	if (!dp->debug->sim_mode && !dp->parser->no_aux_switch
 	    && !dp->parser->gpio_aux_switch) {
@@ -1256,6 +1291,118 @@ static int dp_display_get_usb_extcon(struct dp_display_private *dp)
 	return rc;
 }
 
+#ifdef CONFIG_DRM_SDE_SPECIFIC_PANEL
+static ssize_t dp_display_dp_stop_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct dp_display_private *dp;
+
+	if (dev == NULL) {
+		pr_err("invalid dev\n");
+		return -EINVAL;
+	}
+
+	dp = dev_get_drvdata(dev);
+	if (dp == NULL) {
+		pr_err("no driver data found\n");
+		return -ENODEV;
+	}
+
+	return scnprintf(buf, PAGE_SIZE, "%08x\n", dp->dp_stop_state);
+}
+
+static ssize_t dp_display_dp_stop_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct dp_display_private *dp;
+	u32 mode_bit = 0, bit_pos, bit_val;
+	bool hpd_enable;
+
+	if (dev == NULL) {
+		pr_err("invalid dev\n");
+		return -EINVAL;
+	}
+
+	dp = dev_get_drvdata(dev);
+	if (dp == NULL) {
+		pr_err("no driver data found\n");
+		return -ENODEV;
+	}
+
+	if (kstrtou32(buf, 0, &mode_bit) < 0) {
+		pr_err("sscanf failed to set mode=%d\n", mode_bit);
+		return -EINVAL;
+	}
+	pr_debug("mode_bit = %08x\n", mode_bit);
+
+	bit_pos = mode_bit / 2;
+	bit_val = (mode_bit % 2) << bit_pos;
+	dp->dp_stop_state &= ~(BIT(bit_pos));
+	dp->dp_stop_state |= bit_val;
+
+	hpd_enable = (dp->dp_stop_state) ? false : true;
+	dp->hpd->simulate_connect(dp->hpd, hpd_enable);
+
+	/* Set/Clear minimum PD src caps by Thermal client */
+	if (bit_pos == 0)
+		dp_usbpd_set_min_src_caps(dp->hpd, !!bit_val);
+
+	return count;
+}
+
+static struct device_attribute dp_attributes[] = {
+	__ATTR(dp_is_stopped, 0664,
+		dp_display_dp_stop_show,
+		dp_display_dp_stop_store),
+};
+
+static int dp_display_register_attributes(struct device *dev)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(dp_attributes); i++)
+		if (device_create_file(dev, dp_attributes + i))
+			goto error;
+	return 0;
+
+error:
+	dev_err(dev, "%s: Unable to create interface\n", __func__);
+
+	for (--i; i >= 0 ; i--)
+		device_remove_file(dev, dp_attributes + i);
+	return -ENODEV;
+}
+
+int dp_display_create_fs(struct dp_display_private *dp)
+{
+	int rc = 0;
+	char *path_name = "drm_dp";
+
+	if (dp == NULL) {
+		pr_err("no driver data found\n");
+		return -ENODEV;
+	}
+
+	dev_set_name(&virtualdev, "%s", path_name);
+
+	rc = device_register(&virtualdev);
+	if (rc) {
+		pr_err("%s: device_register failed rc = %d\n", __func__, rc);
+		goto err;
+	}
+
+	rc = dp_display_register_attributes(&virtualdev);
+	if (rc) {
+		device_unregister(&virtualdev);
+		goto err;
+	}
+	dev_set_drvdata(&virtualdev, dp);
+
+err:
+	return rc;
+}
+#endif /* CONFIG_DRM_SDE_SPECIFIC_PANEL */
+
 static void dp_display_deinit_sub_modules(struct dp_display_private *dp)
 {
 	dp_audio_put(dp->panel->audio);
@@ -1453,6 +1600,7 @@ error_ctrl:
 error_panel:
 	dp_link_put(dp->link);
 error_link:
+	dp->aux->drm_aux_deregister(dp->aux);
 	dp_aux_put(dp->aux);
 error_aux:
 	dp_power_put(dp->power);
@@ -1482,6 +1630,14 @@ static int dp_display_post_init(struct dp_display *dp_display)
 		rc = -EINVAL;
 		goto end;
 	}
+
+#ifdef CONFIG_DRM_SDE_SPECIFIC_PANEL
+	rc = dp_display_create_fs(dp);
+	if (rc) {
+		pr_err("sysfs create dir failed, rc = %d\n", rc);
+		goto end;
+	}
+#endif /* CONFIG_DRM_SDE_SPECIFIC_PANEL */
 
 	rc = dp_init_sub_modules(dp);
 	if (rc)
@@ -1702,6 +1858,11 @@ static int dp_display_post_enable(struct dp_display *dp_display, void *panel)
 	dp_panel = panel;
 
 	mutex_lock(&dp->session_lock);
+
+	if (dp->dp_display.is_bootsplash_en) {
+		dp->dp_display.is_bootsplash_en = false;
+		goto end;
+	}
 
 	if (!dp->power_on) {
 		pr_debug("stream not setup, return\n");

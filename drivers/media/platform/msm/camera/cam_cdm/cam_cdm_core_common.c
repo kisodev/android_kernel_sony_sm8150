@@ -1,4 +1,4 @@
-/* Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -118,11 +118,28 @@ struct cam_cdm_bl_cb_request_entry *cam_cdm_find_request_by_bl_tag(
 	uint32_t tag, struct list_head *bl_list)
 {
 	struct cam_cdm_bl_cb_request_entry *node;
+/* sony extension begin */
+#if 1
+	struct cam_cdm_bl_cb_request_entry *node_next;
 
+	list_for_each_entry_safe(node, node_next, bl_list, entry) {
+		if (node->bl_tag == tag) {
+			return node;
+		} else {
+			CAM_ERR(CAM_CDM, "No IRQ took place for bl_tag=%x cookie=%d."
+				" Remove corresponding request from bl_list.",
+				node->bl_tag, node->cookie);
+			list_del_init(&node->entry);
+			kfree(node);
+		}
+	}
+#else
 	list_for_each_entry(node, bl_list, entry) {
 		if (node->bl_tag == tag)
 			return node;
 	}
+#endif
+/* sony extension end */
 	CAM_ERR(CAM_CDM, "Could not find the bl request for tag=%x", tag);
 
 	return NULL;
@@ -243,35 +260,34 @@ int cam_cdm_stream_ops_internal(void *hw_priv,
 		return -EINVAL;
 
 	core = (struct cam_cdm *)cdm_hw->core_info;
+	mutex_lock(&cdm_hw->hw_mutex);
 	client_idx = CAM_CDM_GET_CLIENT_IDX(*handle);
 	client = core->clients[client_idx];
 	if (!client) {
 		CAM_ERR(CAM_CDM, "Invalid client %pK hdl=%x", client, *handle);
+		mutex_unlock(&cdm_hw->hw_mutex);
 		return -EINVAL;
 	}
 	cam_cdm_get_client_refcount(client);
 	if (*handle != client->handle) {
 		CAM_ERR(CAM_CDM, "client id given handle=%x invalid", *handle);
-		cam_cdm_put_client_refcount(client);
-		return -EINVAL;
+		rc = -EINVAL;
+		goto end;
 	}
 	if (operation == true) {
 		if (true == client->stream_on) {
 			CAM_ERR(CAM_CDM,
 				"Invalid CDM client is already streamed ON");
-			cam_cdm_put_client_refcount(client);
-			return rc;
+			goto end;
 		}
 	} else {
 		if (client->stream_on == false) {
 			CAM_ERR(CAM_CDM,
 				"Invalid CDM client is already streamed Off");
-			cam_cdm_put_client_refcount(client);
-			return rc;
+			goto end;
 		}
 	}
 
-	mutex_lock(&cdm_hw->hw_mutex);
 	if (operation == true) {
 		if (!cdm_hw->open_count) {
 			struct cam_ahb_vote ahb_vote;
@@ -280,7 +296,6 @@ int cam_cdm_stream_ops_internal(void *hw_priv,
 			ahb_vote.type = CAM_VOTE_ABSOLUTE;
 			ahb_vote.vote.level = CAM_SVS_VOTE;
 			axi_vote.compressed_bw = CAM_CPAS_DEFAULT_AXI_BW;
-			axi_vote.compressed_bw_ab = CAM_CPAS_DEFAULT_AXI_BW;
 			axi_vote.uncompressed_bw = CAM_CPAS_DEFAULT_AXI_BW;
 
 			rc = cam_cpas_start(core->cpas_handle,

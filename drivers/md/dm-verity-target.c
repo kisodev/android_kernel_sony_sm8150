@@ -40,6 +40,21 @@ static unsigned dm_verity_prefetch_cluster = DM_VERITY_DEFAULT_PREFETCH_SIZE;
 
 module_param_named(prefetch_cluster, dm_verity_prefetch_cluster, uint, S_IRUGO | S_IWUSR);
 
+#ifdef CONFIG_PANIC_ON_DM_VERITY_ERRORS
+static unsigned dm_verity_panic_on_err;
+static int __init get_verity_panic_value(char *str)
+{
+	int val = 0;
+	if (get_option(&str, &val)) {
+		if (val < 0)
+			return -EINVAL;
+		dm_verity_panic_on_err = val;
+	}
+	return 0;
+}
+early_param("panic_on_err", get_verity_panic_value);
+#endif
+
 struct dm_verity_prefetch_work {
 	struct work_struct work;
 	struct dm_verity *v;
@@ -62,14 +77,6 @@ struct dm_verity_prefetch_work {
 struct buffer_aux {
 	int hash_verified;
 };
-/*
- * While system shutdown, skip verity work for I/O error.
- */
-static inline bool verity_is_system_shutting_down(void)
-{
-	return system_state == SYSTEM_HALT || system_state == SYSTEM_POWER_OFF
-		|| system_state == SYSTEM_RESTART;
-}
 
 /*
  * Initialize struct buffer_aux for a freshly created buffer.
@@ -285,8 +292,14 @@ static int verity_handle_err(struct dm_verity *v, enum verity_block_type type,
 		BUG();
 	}
 
-	DMERR_LIMIT("%s: %s block %llu is corrupted", v->data_dev->name,
-		    type_str, block);
+#ifdef CONFIG_PANIC_ON_DM_VERITY_ERRORS
+	if (dm_verity_panic_on_err)
+		panic("%s: %s block %llu is corrupted",
+			v->data_dev->name, type_str, block);
+#endif
+
+	DMERR("%s: %s block %llu is corrupted", v->data_dev->name, type_str,
+		block);
 
 	if (v->corrupted_errs == DM_VERITY_MAX_CORRUPTED_ERRS)
 		DMERR("%s: reached maximum errors", v->data_dev->name);
@@ -587,6 +600,15 @@ static int verity_verify_io(struct dm_verity_io *io)
 }
 
 /*
+ * Skip verity work in response to I/O error when system is shutting down.
+ */
+static inline bool verity_is_system_shutting_down(void)
+{
+	return system_state == SYSTEM_HALT || system_state == SYSTEM_POWER_OFF
+		|| system_state == SYSTEM_RESTART;
+}
+
+/*
  * End one "io" structure with a given error.
  */
 static void verity_finish_io(struct dm_verity_io *io, blk_status_t status)
@@ -614,7 +636,9 @@ static void verity_end_io(struct bio *bio)
 	struct dm_verity_io *io = bio->bi_private;
 
 	if (bio->bi_status &&
-		(!verity_fec_is_enabled(io->v) || verity_is_system_shutting_down())) {
+	    (!verity_fec_is_enabled(io->v) ||
+	     verity_is_system_shutting_down() ||
+	     (bio->bi_opf & REQ_RAHEAD))) {
 		verity_finish_io(io, bio->bi_status);
 		return;
 	}
@@ -1244,6 +1268,7 @@ EXPORT_SYMBOL_GPL(verity_ctr);
 
 static struct target_type verity_target = {
 	.name		= "verity",
+	.features	= DM_TARGET_IMMUTABLE,
 	.version	= {1, 4, 0},
 	.module		= THIS_MODULE,
 	.ctr		= verity_ctr,

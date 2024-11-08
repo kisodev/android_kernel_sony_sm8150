@@ -140,9 +140,20 @@ out:
 	return ret;
 }
 
+static bool phandle_exists(const struct device_node *np,
+			   const char *phandle_name, int index)
+{
+	struct device_node *parse_np = of_parse_phandle(np, phandle_name, index);
+
+	if (parse_np)
+		of_node_put(parse_np);
+
+	return parse_np != NULL;
+}
+
 #define MAX_PROP_SIZE 32
 static int ufshcd_populate_vreg(struct device *dev, const char *name,
-		struct ufs_vreg **out_vreg)
+				struct ufs_vreg **out_vreg)
 {
 	int len, ret = 0;
 	char prop_name[MAX_PROP_SIZE];
@@ -156,7 +167,7 @@ static int ufshcd_populate_vreg(struct device *dev, const char *name,
 	}
 
 	snprintf(prop_name, MAX_PROP_SIZE, "%s-supply", name);
-	if (!of_parse_phandle(np, prop_name, 0)) {
+	if (!phandle_exists(np, prop_name, 0)) {
 		dev_info(dev, "%s: Unable to find %s regulator, assuming enabled\n",
 				__func__, prop_name);
 		goto out;
@@ -466,13 +477,22 @@ static void ufshcd_init_lanes_per_dir(struct ufs_hba *hba)
 	struct device *dev = hba->dev;
 	int ret;
 
-	ret = of_property_read_u32(dev->of_node, "lanes-per-direction",
-		&hba->lanes_per_direction);
+	ret = of_property_read_u32(dev->of_node, "lanes-tx",
+		&hba->lanes_tx);
 	if (ret) {
 		dev_dbg(hba->dev,
-			"%s: failed to read lanes-per-direction, ret=%d\n",
+			"%s: failed to read lanes-tx, ret=%d\n",
 			__func__, ret);
-		hba->lanes_per_direction = UFSHCD_DEFAULT_LANES_PER_DIRECTION;
+		hba->lanes_tx = UFSHCD_DEFAULT_LANES_PER_DIRECTION;
+	}
+
+	ret = of_property_read_u32(dev->of_node, "lanes-rx",
+		&hba->lanes_rx);
+	if (ret) {
+		dev_dbg(hba->dev,
+			"%s: failed to read lanes-rx, ret=%d\n",
+			__func__, ret);
+		hba->lanes_rx = UFSHCD_DEFAULT_LANES_PER_DIRECTION;
 	}
 }
 
@@ -560,8 +580,6 @@ int ufshcd_pltfrm_init(struct platform_device *pdev,
 		dev_err(dev, "Initialization failed\n");
 		goto dealloc_host;
 	}
-
-	platform_set_drvdata(pdev, hba);
 
 	pm_runtime_set_active(&pdev->dev);
 	pm_runtime_enable(&pdev->dev);

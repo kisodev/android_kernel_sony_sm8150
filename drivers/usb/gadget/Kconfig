@@ -311,6 +311,7 @@ config USB_CONFIGFS_NCM
 	depends on NET
 	select USB_U_ETHER
 	select USB_F_NCM
+	select CRC32
 	help
 	  NCM is an advanced protocol for Ethernet encapsulation, allows
 	  grouping of several ethernet frames into one USB transfer and
@@ -394,6 +395,7 @@ config USB_CONFIGFS_EEM
 	depends on NET
 	select USB_U_ETHER
 	select USB_F_EEM
+	select CRC32
 	help
 	  CDC EEM is a newer USB standard that is somewhat simpler than CDC ECM
 	  and therefore can be supported by more hardware.  Technically ECM and
@@ -670,6 +672,13 @@ config USB_CONFIGFS_F_MDM_DATA
 	depends on USB_CONFIGFS && USB_QTI_MDM_DATA_BRIDGE
 	help
 	  USB QTI modem data function driver.
+
+config USB_ANDROID_PRODUCTION
+	boolean "Production capable Android gadget"
+	depends on USB_CONFIGFS
+	default n
+	help
+	  Provides an Android gadget where iSerialNumber is set to 0.
 
 source "drivers/usb/gadget/legacy/Kconfig"
 

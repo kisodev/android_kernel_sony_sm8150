@@ -103,8 +103,6 @@ u64 __cacheline_aligned boot_args[4];
 unsigned int logical_bootcpu_id __read_mostly;
 EXPORT_SYMBOL(logical_bootcpu_id);
 
-extern void *__init __fixmap_remap_fdt(phys_addr_t dt_phys, int *size,
-				       pgprot_t prot);
 /*
  * Parse the device tree cpu nodes and enumerate logical cpu number for
  * the boot cpu based on the mpidr value and reg value from the cpu node.
@@ -125,7 +123,7 @@ static unsigned int __init parse_logical_bootcpu(u64 dt_phys)
 	 * attempt at mapping the FDT in setup_machine()
 	 */
 	early_fixmap_init();
-	fdt = __fixmap_remap_fdt(dt_phys, &size, PAGE_KERNEL);
+	fdt = fixmap_remap_fdt(dt_phys, &size, PAGE_KERNEL);
 	if (!fdt)
 		return 0;
 
@@ -277,8 +275,12 @@ const char * __init __weak arch_read_machine_name(void)
 
 static void __init setup_machine_fdt(phys_addr_t dt_phys)
 {
-	void *dt_virt = fixmap_remap_fdt(dt_phys);
+	int size;
+	void *dt_virt = fixmap_remap_fdt(dt_phys, &size, PAGE_KERNEL);
 	const char *machine_name;
+
+	if (dt_virt)
+		memblock_reserve(dt_phys, size);
 
 	if (!dt_virt || !early_init_dt_scan(dt_virt)) {
 		pr_crit("\n"
@@ -290,6 +292,9 @@ static void __init setup_machine_fdt(phys_addr_t dt_phys)
 		while (true)
 			cpu_relax();
 	}
+
+	/* Early fixups are done, map the FDT as read-only now */
+	fixmap_remap_fdt(dt_phys, &size, PAGE_KERNEL_RO);
 
 	machine_name = arch_read_machine_name();
 	if (!machine_name)
@@ -341,6 +346,34 @@ static void __init request_standard_resources(void)
 u64 __cpu_logical_map[NR_CPUS] = { [0 ... NR_CPUS-1] = INVALID_HWID };
 
 void __init __weak init_random_pool(void) { }
+
+/*
+ * HACK: These two functions sets the androidboot.mode=charger based
+ * on the Sony Mobile parameters startup and warmboot.
+ */
+static unsigned long sony_startup;
+
+static int __init sony_param_startup(char *p)
+{
+	if (kstrtoul(p, 16, &sony_startup))
+		return 1;
+	return 0;
+}
+early_param("startup", sony_param_startup);
+
+static int __init sony_param_warmboot(char *p)
+{
+	unsigned long warmboot;
+
+	if (kstrtoul(p, 16, &warmboot))
+		return 1;
+
+	if (!warmboot && (sony_startup & 0x4004))
+		strlcat(boot_command_line, " androidboot.mode=charger",
+			COMMAND_LINE_SIZE);
+	return 0;
+}
+early_param("warmboot", sony_param_warmboot);
 
 void __init setup_arch(char **cmdline_p)
 {
